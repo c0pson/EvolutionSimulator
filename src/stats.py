@@ -1,11 +1,18 @@
 from dataclasses import dataclass
 
 @dataclass
-class Stats:
-    size: int
+class Genes:
+    size: float
     speed: float
     stamina: int
-    hunger: float
+    fov: int
+
+@dataclass
+class Stats:
+    hunger: int
+    alive: bool
+    score: float
+    energy: float = 0.0
 
 @dataclass
 class PopulationSegment:
