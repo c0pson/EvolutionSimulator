@@ -37,3 +37,4 @@ out/
 #### References
 
  - [Game of Life Wikipedia page](https://en.wikipedia.org/wiki/Conway's_Game_of_Life)
+ - [Evolutionary Algorithm](https://www.wikiwand.com/en/Evolutionary_algorithm)
