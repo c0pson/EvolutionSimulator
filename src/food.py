@@ -32,7 +32,7 @@ class PreysFood:
     def draw(self, surface: pygame.Surface) -> None:
         if self.eaten:
             return
-        surface.blit(pygame.transform.rotozoom(self.sprite, 0, 1), self.rect)
+        surface.blit(pygame.transform.rotozoom(self.sprite, 0, 0.5), self.rect)
 
     @classmethod
     def sprite_init(cls) -> None:

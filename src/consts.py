@@ -2,10 +2,10 @@ from enum import IntEnum, Enum
 
 class SIZE(IntEnum):
     # WINDOW
-    WIDTH = 1080
-    HEIGHT = 720
+    WIDTH = 1280
+    HEIGHT = 920
     # GENETIC ALGORITHM
-    POPULATION = 30
+    POPULATION = 100
 
 class ENERGY(float, Enum):
     IDLE_COST = 0.002
@@ -16,5 +16,14 @@ class ENERGY(float, Enum):
     FOOD_ENERGY = 3.0
     KILL_ENERGY = 5.0
     STAMINA_TO_ENERGY = 1.0
+
+class AI(float, Enum):
+    WANDER_JITTER = 25.0
+    SEPARATION_RADIUS = 40.0
+    SEPARATION_WEIGHT = 0.5
+    BOUNDARY_MARGIN = 50.0
+    BOUNDARY_FORCE = 2.5
+    PREY_SCHOOL_RADIUS = 120.0
+    PREY_SCHOOL_WEIGHT = 0.15
 
 FPS = 60

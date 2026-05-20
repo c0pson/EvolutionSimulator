@@ -1,10 +1,12 @@
 import pygame
+from time import time
 
 from consts import SIZE
 
 from specie import Hunter, Prey
 from food import PreysFood
 from stat_window import StatWindow
+from population import Population
 
 class App:
     def __init__(self, debug: bool=False) -> None:
@@ -15,8 +17,10 @@ class App:
 
         PreysFood.sprite_init()
         # Initial Population
-        self.hunters = [Hunter() for _ in range(SIZE.POPULATION)]
-        self.preys = [Prey() for _ in range(SIZE.POPULATION)]
+        self.population = Population(SIZE.POPULATION, 12)
+        self.generation: int = 0
+        self.hunters = [Hunter(size=0.5, corner="top-left") for _ in range(SIZE.POPULATION//2)]
+        self.preys = [Prey(size=0.5, corner="bottom-right") for _ in range(SIZE.POPULATION)]
         self.preys_food = [PreysFood() for _ in range(int(SIZE.POPULATION * 0.75))]
 
         self.clock = pygame.time.Clock()
@@ -77,16 +81,30 @@ class App:
         self.stat_window.draw(self.screen,
             hunters_count=len(list(filter(lambda x: x.stats.alive, self.hunters))),
             preys_count=len(list(filter(lambda x: x.stats.alive, self.preys))),
-            generation=0,
+            generation=self.generation,
             fps=int(self.clock.get_fps())
         )
         pygame.display.flip()
+
+    def finish_generation(self) -> None:
+        self.hunters = self.population.mutate(self.hunters, 10)
+        self.preys = self.population.mutate(self.preys, 10)
+        self.preys_food = [PreysFood() for _ in range(int(SIZE.POPULATION * 0.75))]
+        self.population.generation += 1
+        self.population.start_generation = time()
+        for hunter in self.hunters:
+            hunter.restart()
+        for prey in self.preys:
+            prey.restart()
+        self.generation += 1
 
     def mainloop(self) -> None:
         while self.running:
             self.eventloop()
             self.drawloop()
             self.clock.tick(120)
+            if time() - self.population.start_generation >= self.population.population_duration:
+                self.finish_generation()
 
 if __name__ == "__main__":
     pygame.init()
