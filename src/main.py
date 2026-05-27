@@ -3,8 +3,9 @@ from time import time
 
 from consts import SIZE
 
-from specie import Hunter, Prey
+from specie import Hunter, Prey, Specie
 from food import PreysFood
+from obstacle import Obstacle
 from stat_window import StatWindow
 from population import Population
 
@@ -12,20 +13,35 @@ class App:
     def __init__(self, debug: bool=False) -> None:
         # GUI
         self.screen = pygame.display.set_mode([SIZE.WIDTH, SIZE.HEIGHT])
-        pygame.display.set_caption("Evolution Simulator - Genetic Algorithm")
+        pygame.display.set_caption("Evolution Simulator")
         self.stat_window = StatWindow()
-
         PreysFood.sprite_init()
+        # Obstacles
+        self.obstacles = Obstacle.spawn_random(SIZE.OBSTACLE_COUNT)
+        Specie.obstacles = self.obstacles  # share with all species
         # Initial Population
         self.population = Population(SIZE.POPULATION, 12)
         self.generation: int = 0
         self.hunters = [Hunter(size=0.5, corner="top-left") for _ in range(SIZE.POPULATION//2)]
         self.preys = [Prey(size=0.5, corner="bottom-right") for _ in range(SIZE.POPULATION)]
-        self.preys_food = [PreysFood() for _ in range(int(SIZE.POPULATION * 0.75))]
+        self.preys_food = self._spawn_food()
 
         self.clock = pygame.time.Clock()
         self.running: bool = True
-        self.debug=debug
+        self.debug = debug
+
+    def _spawn_food(self) -> list[PreysFood]:
+        food_list: list[PreysFood] = []
+        count = int(SIZE.POPULATION * 0.75)
+        for _ in range(count):
+            f = PreysFood()
+            for _ in range(20):
+                if any(o.rect.collidepoint(f.x, f.y) for o in self.obstacles):
+                    f.update_position()
+                else:
+                    break
+            food_list.append(f)
+        return food_list
 
     def eating_collision(self) -> None:
         for hunter in self.hunters:
@@ -72,6 +88,8 @@ class App:
 
     def drawloop(self) -> None:
         self.screen.fill((194, 208, 153))
+        for obs in self.obstacles:
+            obs.draw(self.screen)
         for food in self.preys_food:
             food.draw(self.screen)
         for prey in self.preys:
@@ -89,7 +107,7 @@ class App:
     def finish_generation(self) -> None:
         self.hunters = self.population.mutate(self.hunters, 10)
         self.preys = self.population.mutate(self.preys, 10)
-        self.preys_food = [PreysFood() for _ in range(int(SIZE.POPULATION * 0.75))]
+        self.preys_food = self._spawn_food()
         self.population.generation += 1
         self.population.start_generation = time()
         for hunter in self.hunters:

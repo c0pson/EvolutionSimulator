@@ -30,7 +30,7 @@ class Population:
         if len(population) < 2:
             return population
         ranked = self.rank(population)
-        corner = ranked[0].corner if ranked else None  # Preserve corner from original population
+        corner = ranked[0].corner if ranked else None
         if isinstance(population[0], Hunter):
             n = self.max_size // 2
         else:
@@ -48,7 +48,7 @@ class Population:
                 attempts += 1
             child_genes = p1.genes * p2.genes
             child = type(p1).from_genes(child_genes, generation=self.generation, corner=corner)
-            new_pop.append(child)
+            new_pop.append(child) # type: ignore
         diversity_count = max(1, int(n * self.diversity_inject))
         for _ in range(diversity_count):
             fresh = type(ranked[0]).from_genes(
@@ -56,7 +56,7 @@ class Population:
                 generation=self.generation,
                 corner=corner,
             )
-            new_pop.append(fresh)
+            new_pop.append(fresh) # type: ignore
         while len(new_pop) < n:
             survivor = self._tournament(ranked)
             new_pop.append(survivor)

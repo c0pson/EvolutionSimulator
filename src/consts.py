@@ -6,15 +6,16 @@ class SIZE(IntEnum):
     HEIGHT = 920
     # GENETIC ALGORITHM
     POPULATION = 100
+    OBSTACLE_COUNT = 14
 
 class ENERGY(float, Enum):
     IDLE_COST = 0.002
     MOVE_COST_BASE = 0.005
     SIZE_COST_EXP = 1.5
-    HUNT_COST_MULT = 1.8
+    HUNT_COST_MULT = 3.0
     FLEE_COST_MULT = 1.6
     FOOD_ENERGY = 3.0
-    KILL_ENERGY = 5.0
+    KILL_ENERGY = 4.0
     STAMINA_TO_ENERGY = 1.0
 
 class AI(float, Enum):
@@ -25,5 +26,7 @@ class AI(float, Enum):
     BOUNDARY_FORCE = 2.5
     PREY_SCHOOL_RADIUS = 120.0
     PREY_SCHOOL_WEIGHT = 0.15
+    OBSTACLE_STEER_MARGIN = 60.0
+    OBSTACLE_STEER_FORCE = 4.0
 
 FPS = 60

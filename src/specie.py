@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from random import randint, gauss, random
 import pygame
 import time
@@ -12,8 +10,8 @@ from tools import resource_path
 from consts import SIZE, ENERGY, AI
 from sprite_sheet import AnimatedSpriteSheet
 
-if TYPE_CHECKING:
-    from food import PreysFood
+from food import PreysFood
+from obstacle import Obstacle
 
 def _angle_diff(a: float, b: float) -> float:
     d = (b - a) % 360
@@ -31,26 +29,29 @@ def _dist_sq(x1, y1, x2, y2) -> float:
 
 class Specie(ABC):
     BASE_FOV_RANGE = 190
-    
+    obstacles: list[Obstacle] = []
     @staticmethod
     def _spawn_position(corner: str | None = None) -> tuple[float, float]:
-        """Get spawn position based on corner: 'top-left', 'top-right', 'bottom-left', 'bottom-right', or None for random."""
         margin = 80
-        if corner == "top-left":
-            return (float(randint(margin, SIZE.WIDTH // 2 - margin)), 
-                    float(randint(margin, SIZE.HEIGHT // 2 - margin)))
-        elif corner == "top-right":
-            return (float(randint(SIZE.WIDTH // 2 + margin, SIZE.WIDTH - margin)), 
-                    float(randint(margin, SIZE.HEIGHT // 2 - margin)))
-        elif corner == "bottom-left":
-            return (float(randint(margin, SIZE.WIDTH // 2 - margin)), 
-                    float(randint(SIZE.HEIGHT // 2 + margin, SIZE.HEIGHT - margin)))
-        elif corner == "bottom-right":
-            return (float(randint(SIZE.WIDTH // 2 + margin, SIZE.WIDTH - margin)), 
-                    float(randint(SIZE.HEIGHT // 2 + margin, SIZE.HEIGHT - margin)))
-        else:
-            return (float(randint(40, SIZE.WIDTH - 40)), float(randint(40, SIZE.HEIGHT - 40)))
-    
+        for _ in range(50):
+            if corner == "top-left":
+                pos = (float(randint(margin, SIZE.WIDTH // 2 - margin)),
+                       float(randint(margin, SIZE.HEIGHT // 2 - margin)))
+            elif corner == "top-right":
+                pos = (float(randint(SIZE.WIDTH // 2 + margin, SIZE.WIDTH - margin)),
+                       float(randint(margin, SIZE.HEIGHT // 2 - margin)))
+            elif corner == "bottom-left":
+                pos = (float(randint(margin, SIZE.WIDTH // 2 - margin)),
+                       float(randint(SIZE.HEIGHT // 2 + margin, SIZE.HEIGHT - margin)))
+            elif corner == "bottom-right":
+                pos = (float(randint(SIZE.WIDTH // 2 + margin, SIZE.WIDTH - margin)),
+                       float(randint(SIZE.HEIGHT // 2 + margin, SIZE.HEIGHT - margin)))
+            else:
+                pos = (float(randint(40, SIZE.WIDTH - 40)), float(randint(40, SIZE.HEIGHT - 40)))
+            if not any(o.rect.collidepoint(int(pos[0]), int(pos[1])) for o in Specie.obstacles):
+                return pos
+        return pos
+
     def __init__(
         self,
         size: float = 1.0,
@@ -82,7 +83,7 @@ class Specie(ABC):
         else:
             self.x, self.y = self._spawn_position(corner)
         self.rotation: float = randint(0, 360)
- 
+
         self.desired_rotation: float = self.rotation
         self.wander_angle: float = float(randint(0, 360))
         self.hunting = False
@@ -146,7 +147,7 @@ class Specie(ABC):
         )
         surface.blit(self.fov_surface, (0, 0))
 
-    def in_fov(self, other: Specie) -> bool:
+    def in_fov(self, other: "Specie") -> bool:
         dx = other.x - self.x
         dy = other.y - self.y
         d2 = dx * dx + dy * dy
@@ -156,6 +157,12 @@ class Specie(ABC):
         facing = -self.rotation + 90
         diff = (angle_to - facing) % 360 - 180
         return abs(diff) <= self.genes.fov / 2
+
+    def _has_obstacle_between(self, tx: float, ty: float) -> bool:
+        for obs in self.obstacles:
+            if obs.rect.clipline(self.x, self.y, tx, ty):
+                return True
+        return False
 
     def _steer_toward(self, target_angle: float) -> None:
         diff = _angle_diff(self.rotation, target_angle)
@@ -181,13 +188,29 @@ class Specie(ABC):
             nudge -= f * (1.0 - (SIZE.HEIGHT - self.y) / m) * (1 if math.sin(math.radians(self.rotation)) > 0 else -1)
         return nudge
 
+    def _obstacle_steer(self) -> float:
+        margin = AI.OBSTACLE_STEER_MARGIN.value
+        force = AI.OBSTACLE_STEER_FORCE.value
+        rad = math.radians(self.rotation)
+        probe_x = self.x + math.sin(rad) * margin
+        probe_y = self.y - math.cos(rad) * margin
+        nudge = 0.0
+        for obs in self.obstacles:
+            if obs.rect.collidepoint(int(probe_x), int(probe_y)):
+                cx = obs.rect.centerx
+                cy = obs.rect.centery
+                away_angle = _angle_to(self.x, self.y, cx, cy) + 180.0
+                diff = _angle_diff(self.rotation, away_angle % 360)
+                nudge += math.copysign(force, diff)
+        return nudge
+
     def move(self) -> None:
         if not self.stats.alive:
             return
         self.ticks_alive += 1
         if not self.hunting and not self.fleeing:
             self._wander_steer()
-        self.rotation = self.desired_rotation + self._boundary_steer()
+        self.rotation = self.desired_rotation + self._boundary_steer() + self._obstacle_steer()
         effective_speed = self.genes.speed
         if self.fleeing:
             effective_speed *= 1.3
@@ -204,6 +227,11 @@ class Specie(ABC):
         if new_y < 0 or new_y > SIZE.HEIGHT:
             self.rotation = 180 - self.rotation
             new_y = max(0, min(new_y, SIZE.HEIGHT))
+        for obs in self.obstacles:
+            if obs.rect.collidepoint(int(new_x), int(new_y)):
+                new_x, new_y = obs.push_out(new_x, new_y, radius=16.0 * self.genes.size)
+                away = _angle_to(self.x, self.y, obs.rect.centerx, obs.rect.centery) + 180.0
+                self.rotation = away % 360
         step = math.hypot(new_x - self.x, new_y - self.y)
         self.stats.distance_moved += step
         self.x = new_x
@@ -238,7 +266,7 @@ class Specie(ABC):
 
     @classmethod
     @abstractmethod
-    def from_genes(cls, genes: Genes, generation: int, corner: str | None = None) -> Specie: ...
+    def from_genes(cls, genes: Genes, generation: int, corner: str | None = None) -> "Specie": ...
 
 class Hunter(Specie):
     def __init__(self, size=0.15, speed=1.2, stamina=8, fov=30,
@@ -256,13 +284,13 @@ class Hunter(Specie):
         self.mask = pygame.mask.from_surface(self.sprites.next())
         self._target: Prey | None = None
 
-    def collides(self, prey: Prey) -> bool:
+    def collides(self, prey: "Prey") -> bool:
         if not self.stats.alive:
             return False
         offset = (int(prey.rect.x - self.rect.x), int(prey.rect.y - self.rect.y))
         return self.mask.overlap(prey.mask, offset) is not None
 
-    def eat(self, prey: Prey) -> None:
+    def eat(self, prey: "Prey") -> None:
         prey.stats.alive = False
         self.stats.hunger += 1
         self.stats.damage_dealt += prey.genes.size
@@ -271,25 +299,26 @@ class Hunter(Specie):
             self.genes.stamina * ENERGY.STAMINA_TO_ENERGY.value,
         )
 
-    def pick_target(self, visible_prey: list[Prey]) -> None:
+    def pick_target(self, visible_prey: list["Prey"]) -> None:
         if not visible_prey:
             self._target = None
             return
         if self._target and self._target.stats.alive and self._target in visible_prey:
             if random() < self.genes.aggression:
-                return  # stay locked on
+                return
         best = None
         best_score = -1.0
         for p in visible_prey:
             d2 = _dist_sq(self.x, self.y, p.x, p.y)
             dist = math.sqrt(d2) + 1.0
-            score = (1.0 / dist) * (1.0 / (p.genes.size + 0.1))
+            los_penalty = 0.3 if self._has_obstacle_between(p.x, p.y) else 1.0
+            score = (1.0 / dist) * (1.0 / (p.genes.size + 0.1)) * los_penalty
             if score > best_score:
                 best_score = score
                 best = p
         self._target = best
 
-    def hunt(self, prey: Prey) -> None:
+    def hunt(self, prey: "Prey") -> None:
         self.hunting = True
         self._target = prey
         closing_speed = self.genes.speed * 1.1
@@ -317,7 +346,7 @@ class Hunter(Specie):
         return (efficiency + survival) * fov_bonus * (1.0 + agility_bonus)
 
     @classmethod
-    def from_genes(cls, genes: Genes, generation: int = 0, corner: str | None = None) -> Hunter:
+    def from_genes(cls, genes: Genes, generation: int = 0, corner: str | None = None) -> "Hunter":
         return cls(
             size=genes.size, speed=genes.speed, stamina=genes.stamina,
             fov=genes.fov, turn_rate=genes.turn_rate, aggression=genes.aggression,
@@ -330,7 +359,7 @@ class Prey(Specie):
     def __init__(self, size=0.1, speed=1.0, stamina=10, fov=60,
                  turn_rate=7.0, aggression=0.3, caution=0.6, perception=1.0,
                  hunger=0, alive=True, score=0.0,
-                 generation=0, age=0, x=None, y=None, corner=None):
+                 generation=0, age=0, x=None, y=None, corner=None) -> None:
         super().__init__(size, speed, stamina, fov, turn_rate, aggression,
                          caution, perception, hunger, alive, score,
                          generation, age, x, y, corner)
@@ -390,7 +419,7 @@ class Prey(Specie):
         flee_range = self.fov_range * (0.5 + 0.5 * self.genes.caution)
         return d2 < flee_range ** 2
 
-    def school_steer(self, neighbors: list[Prey]) -> None:
+    def school_steer(self, neighbors: list["Prey"]) -> None:
         if not neighbors:
             return
         cx, cy = 0.0, 0.0
@@ -423,7 +452,7 @@ class Prey(Specie):
         return (survival + food_score) * stealth * eff_bonus * (1.0 + agility + percept)
 
     @classmethod
-    def from_genes(cls, genes: Genes, generation: int = 0, corner: str | None = None) -> Prey:
+    def from_genes(cls, genes: Genes, generation: int = 0, corner: str | None = None) -> "Prey":
         return cls(
             size=genes.size, speed=genes.speed, stamina=genes.stamina,
             fov=genes.fov, turn_rate=genes.turn_rate, aggression=genes.aggression,
